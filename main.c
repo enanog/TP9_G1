@@ -19,7 +19,8 @@
 #include <stdio.h>
 #include <stdint.h>
 
-enum{
+enum
+{
 	LED_SELECTOR = 0,
 	NOT_LED,
 	OFF_ALL,
@@ -27,7 +28,8 @@ enum{
 	FINISH
 };
 
-enum{
+enum
+{
 	STOP = 0,
 	RUNNING,
 };
