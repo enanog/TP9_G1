@@ -17,3 +17,7 @@
 
 #include "leds_emulator.h"
 
+void display_leds(uint8_t)
+{
+
+}

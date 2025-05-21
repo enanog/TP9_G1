@@ -15,11 +15,11 @@
  * fecha: 21/05/2025
  * ---------------------------------------------------*/
 
-#include <stdint.h>;
+#include "port_emulator.h";
 
 #ifndef LEDS_EMULATOR_H
 #define LEDS_EMULATOR_H
 
-void print_leds();
+void display_leds(uint8_t);
 
 #endif /* LEDS_EMULATOR_H */
