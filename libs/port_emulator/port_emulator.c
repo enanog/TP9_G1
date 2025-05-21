@@ -18,6 +18,22 @@
 #include <stdint.h>
 #include "port_emulator.h"
 
+#define _PORTA portD.REGISTER.PORT.A
+#define _PORTB portD.REGISTER.PORT.B
+#define _WORD portD.REGISTER.WORD
+#define _MODE portD.REGISTER.MODE
+#define sizePort 8
+
+#define _offsetPort(port) ((!(port))? 8: 0)
+#define _bitSet(x, n) ((x) | (1 << (n)))
+#define _bitClr(x, n) ((x) & ~(1 << (n)))
+#define _bitGet(x, n) (((x) >> (n)) & 1)
+#define _bitToggle(x, n) ((x) ^ (1 << (n)))
+#define _maskOn(x, mask) ((x) | (mask))
+#define _maskOff(x, mask) ((x) & ~(mask))
+#define _maskToggle(x, mask) ((x) ^ (mask))
+
+/*
 typedef union
 {
 	struct
@@ -55,63 +71,213 @@ typedef union
 typedef struct
 {
 	gpio_port_d_t REGISTER;
-	uint8_t MODE;
+	uint16_t MODE;
 }gpio_register_t;
+*/
 
-#define _PORTA portD.REGISTER.PORT.A
-#define _PORTB portD.REGISTER.PORT.B
+gpio_register_t portD = { .REGISTER.WORD = 0, .MODE = 0};
 
-#define _bitSet(port, n) ((port) | (1 << (n)))
-#define _bitClr(port, n) ((port) & ~(1 << (n)))
-#define _bitGet(port, n) ((port >> (n)) & 1)
-#define _bitToggle(port, n) ((port) ^ (1 << (n)))
-#define _maskOn(port, mask) ((port) | (mask))
-#define _maskOff(port, mask) ((port) & (mask))
-#define _maskToggle(port, mask) ((port) ^ (mask))
+static void* getPort(uint8_t port);
+static void bitSet(uint8_t port, uint8_t pin);
+static void bitClr(uint8_t port, uint8_t pin);
+static void bitToggle(uint8_t port, uint8_t pin);
+static void maskOn(uint8_t port, uint16_t mask);
+static void maskOff(uint8_t port, uint16_t mask);
+static void maskToggle(uint8_t port, uint16_t mask);
 
-static gpio_register_t portD = { .REGISTER.WORD = 0, .MODE = 0};
+/*******************************************************************************
+ *******************************************************************************
+                        GLOBAL FUNCTION DEFINITIONS
+ *******************************************************************************
+ ******************************************************************************/
 
+void GPIO_PinInit(uint8_t port, uint8_t pin, uint8_t state)
+{
+	uint8_t offset = _offsetPort(port);
+	_MODE = (state)? _bitSet(_MODE , pin + offset): _bitClr(_MODE , pin + offset);
+}
 
-static void* getPort(uint8_t port)
+void GPIO_SetPinState(uint8_t port, uint8_t pin, uint8_t state)
+{
+	uint8_t offset = _offsetPort(port);
+	if(_bitGet(_MODE, pin + offset) != OUTPUT)
+	{
+		return;
+	}
+
+	switch(state)
+	{
+		case HIGH:
+			bitSet(port, pin);
+			break;
+
+		case LOW:
+			bitClr(port, pin);
+			break;
+
+		case TOGGLE:
+			bitToggle(port, pin);
+			break;
+
+		default:
+			break;
+	}
+}
+
+void GPIO_SetMaskedOutput(uint8_t port, uint16_t mask, uint8_t state)
+{
+	for(uint8_t i = _offsetPort(port); i < 2*sizePort; i++)
+	{
+		if(_bitGet(_MODE, i) != OUTPUT && _bitGet(mask, i))
+		{
+			return;
+		}
+	}
+	switch(state)
+	{
+		case HIGH:
+			maskOn(port, mask);
+			break;
+
+		case LOW:
+			maskOff(port, mask);
+			break;
+
+		case TOGGLE:
+			maskToggle(port, mask);
+			break;
+
+		default:
+			break;
+	}
+}
+
+uint8_t GPIO_ReadPin(uint8_t port, uint8_t pin)
+{
+	uint8_t offset = _offsetPort(port);
+	if(_bitGet(_MODE, pin + offset) != INPUT)
+	{
+		return INPUT_ERROR;
+	}
+	uint8_t state = _bitGet(_WORD, pin + offset);
+	return state;
+}
+
+/*******************************************************************************
+ *******************************************************************************
+                        LOCAL FUNCTION DEFINITIONS
+ *******************************************************************************
+ ******************************************************************************/
+
+static void *getPort(uint8_t port)
 {
 	switch(port)
 	{
 		case PORTA:
 			return &_PORTA;
 		case PORTB:
-		case PORTD:
 			return &_PORTB;
+		case PORTD:
+			return &portD;
 		default:
 			return NULL;
 	}
 }
 
-void bitSet(uint8_t port, uint8_t n)
+static void bitSet(uint8_t port, uint8_t pin)
 {
+	if(port == PORTD)
+	{
+		_WORD = _bitSet(_WORD, pin);
+		return;
+	}
+
 	gpio_port_t *p = getPort(port);
-	if(p != NULL)
+	if(p == NULL)
 	{
 		return;
 	}
-	p->byte = _bitSet(p->byte, n);
+	p->byte = _bitSet(p->byte, pin);
 }
 
-void bitClr(uint8_t port, uint8_t n)
+static void bitClr(uint8_t port, uint8_t pin)
 {
+	if(port == PORTD)
+	{
+		_WORD = _bitClr(_WORD, pin);
+		return;
+	}
+
 	gpio_port_t *p = getPort(port);
-	if(p != NULL)
+	if(p == NULL)
 	{
 		return;
 	}
-	p->byte = _bitClr(p->byte, n);
+	p->byte = _bitClr(p->byte, pin);
 }
 
-void bitSet(uint8_t port, uint8_t n)
+static void bitToggle(uint8_t port, uint8_t pin)
 {
+	if(port == PORTD)
+	{
+		_WORD = _bitToggle(_WORD, pin);
+		return;
+	}
+
 	gpio_port_t *p = getPort(port);
-	if(p != NULL)
+	if(p == NULL)
 	{
 		return;
 	}
-	p->byte = _bitSet(p->byte, n);
+	p->byte = _bitToggle(p->byte, pin);
 }
+
+static void maskOn(uint8_t port, uint16_t mask)
+{
+	if(port == PORTD)
+	{
+		_WORD = _maskOn(_WORD, mask);
+		return;
+	}
+
+	gpio_port_t *p = getPort(port);
+	if(p == NULL)
+	{
+		return;
+	}
+
+	p->byte = _maskOn(p->byte, mask);
+}
+
+static void maskOff(uint8_t port, uint16_t mask)
+{
+	if(port == PORTD)
+	{
+		_WORD = _maskOff(_WORD, mask);
+		return;
+	}
+
+	gpio_port_t *p = getPort(port);
+	if(p == NULL)
+	{
+		return;
+	}
+	p->byte = _maskOff(p->byte, mask);
+}
+
+static void maskToggle(uint8_t port, uint16_t mask)
+{
+	if(port == PORTD)
+	{
+		_WORD = _maskToggle(_WORD, mask);
+		return;
+	}
+
+	gpio_port_t *p = getPort(port);
+	if(p == NULL)
+	{
+		return;
+	}
+	p->byte = _maskToggle(p->byte, mask);
+}
+

@@ -18,6 +18,7 @@
 
 #include <stdio.h>
 #include <stdint.h>
+#include "libs/port_emulator/port_emulator.h"
 
 enum
 {
@@ -36,6 +37,7 @@ enum
 
 int main(void)
 {
+	/*
 	uint8_t prog = RUNNING;
 
 	while(prog)
@@ -62,6 +64,25 @@ int main(void)
 				printf("Se ingreso un comando erroneo.\n");
 				break;
 		}
-	}
+	}*/
+
+	GPIO_PinInit(PORTA, 0, INPUT);
+	GPIO_PinInit(PORTA, 1, OUTPUT);
+	GPIO_PinInit(PORTA, 3, OUTPUT);
+	GPIO_PinInit(PORTB, 2, INPUT);
+	GPIO_PinInit(PORTB, 5, OUTPUT);
+	GPIO_PinInit(PORTB, 7, OUTPUT);
+
+	GPIO_SetMaskedOutput(PORTD, 0xFFFF, HIGH);
+	GPIO_SetMaskedOutput(PORTB, 0x00FF, LOW);
+	GPIO_SetMaskedOutput(PORTA, 0x00FF, TOGGLE);
+	GPIO_SetMaskedOutput(PORTD, 0xFFFF, TOGGLE);
+
+	GPIO_SetPinState(PORTA, 0, TOGGLE);
+	GPIO_SetPinState(PORTA, 1, LOW);
+	GPIO_SetMaskedOutput(PORTD, 0xFFFF, TOGGLE);
+	GPIO_SetPinState(PORTB, 0, HIGH);
+	GPIO_SetPinState(PORTD, 0, LOW);
+
 	return 0;
 }
