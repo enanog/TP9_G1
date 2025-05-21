@@ -15,7 +15,6 @@
  * fecha: 21/05/2025
  * ---------------------------------------------------*/
 
-#include "port_emulator.h";
 
 #ifndef LEDS_EMULATOR_H
 #define LEDS_EMULATOR_H

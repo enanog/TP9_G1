@@ -1,18 +1,33 @@
+/* ---------------------------------------------------
+ * port_emulator.h
+ * ---------------------------------------------------
+ * GRUPO 1:
+ * 	CASTRO, Tomás
+ *	FRIGERIO, Dylan
+ * 	VALENZUELA, Agustín
+ * 	YAGGI, Lucca
+ *
+ * Profesores:
+ * 	MAGLIIOLA, Nicolas
+ * 	JACOBY, Daniel
+ * 	VACATELLO, Pablo
+ *
+ * fecha: 21/05/2025
+ * ---------------------------------------------------*/
+
 #ifndef PORT_EMULATOR_H
 #define PORT_EMULATOR_H
 
-typedef struct
-{
-	
-}port_t;
+//#define BIG_ENDIAN;
 
+#define PORTA
+#define PORTB
+#define PORTD
 
-#define bitSet
-#define bitClr
-#define bitGet
-#define bitToggle
-#define maskOn
-#define maskOff
-#define maskToggle
+#define INPUT
+#define OUTPUT
 
-#endif
+#define DDR
+#define
+
+#endif /* PORT_EMULATOR_H */
