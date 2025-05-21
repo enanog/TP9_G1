@@ -15,19 +15,28 @@
  * fecha: 21/05/2025
  * ---------------------------------------------------*/
 
+#include <stdio.h>
+
 #ifndef PORT_EMULATOR_H
 #define PORT_EMULATOR_H
 
+// Default Little Endian environment
 //#define BIG_ENDIAN;
+enum
+{
+	INPUT = 0,
+	OUTPUT,
+};
 
-#define PORTA
-#define PORTB
-#define PORTD
+enum
+{
+	PORTA = 0,
+	PORTB,
+	PORTD,
+};
 
-#define INPUT
-#define OUTPUT
+#define PDDR	// Port Data Direction Register
 
-#define DDR
-#define
+void bitSet(uint8_t port, uint8_t n);
 
 #endif /* PORT_EMULATOR_H */
