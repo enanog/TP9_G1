@@ -21,7 +21,7 @@
 #define _PORTA portD.REGISTER.PORT.A
 #define _PORTB portD.REGISTER.PORT.B
 #define _WORD portD.REGISTER.WORD
-#define _MODE portD.REGISTER.MODE
+#define _MODE portD.MODE
 #define sizePort 8
 
 #define _offsetPort(port) ((!(port))? 8: 0)
@@ -78,9 +78,9 @@ typedef struct
 gpio_register_t portD = { .REGISTER.WORD = 0, .MODE = 0};
 
 static void* getPort(uint8_t port);
-static void bitSet(uint8_t port, uint8_t pin);
-static void bitClr(uint8_t port, uint8_t pin);
-static void bitToggle(uint8_t port, uint8_t pin);
+static void bitSet(uint8_t port, uint8_t bit);
+static void bitClr(uint8_t port, uint8_t bit);
+static void bitToggle(uint8_t port, uint8_t bit);
 static void maskOn(uint8_t port, uint16_t mask);
 static void maskOff(uint8_t port, uint16_t mask);
 static void maskToggle(uint8_t port, uint16_t mask);
@@ -100,6 +100,8 @@ void GPIO_PinInit(uint8_t port, uint8_t pin, uint8_t state)
 void GPIO_SetPinState(uint8_t port, uint8_t pin, uint8_t state)
 {
 	uint8_t offset = _offsetPort(port);
+
+	// Check if the pin is configured as OUTPUT
 	if(_bitGet(_MODE, pin + offset) != OUTPUT)
 	{
 		return;
@@ -122,6 +124,19 @@ void GPIO_SetPinState(uint8_t port, uint8_t pin, uint8_t state)
 		default:
 			break;
 	}
+}
+
+uint8_t GPIO_ReadPin(uint8_t port, uint8_t pin)
+{
+	uint8_t offset = _offsetPort(port);
+	if(_bitGet(_MODE, pin + offset) != INPUT)
+	{
+		return INPUT_ERROR;
+	}
+
+	// Read the pin state from the _WORD register
+	uint8_t state = _bitGet(_WORD, pin + offset);
+	return state;	// Return the read state
 }
 
 void GPIO_SetMaskedOutput(uint8_t port, uint16_t mask, uint8_t state)
@@ -152,23 +167,20 @@ void GPIO_SetMaskedOutput(uint8_t port, uint16_t mask, uint8_t state)
 	}
 }
 
-uint8_t GPIO_ReadPin(uint8_t port, uint8_t pin)
-{
-	uint8_t offset = _offsetPort(port);
-	if(_bitGet(_MODE, pin + offset) != INPUT)
-	{
-		return INPUT_ERROR;
-	}
-	uint8_t state = _bitGet(_WORD, pin + offset);
-	return state;
-}
-
 /*******************************************************************************
  *******************************************************************************
                         LOCAL FUNCTION DEFINITIONS
  *******************************************************************************
  ******************************************************************************/
 
+/**
+ * @brief Returns a pointer to the internal memory representation of a GPIO port.
+ *
+ * @param port  Identifier for the port (PORTA, PORTB, or PORTD).
+ *
+ * @return Pointer to the corresponding port structure or variable.
+ *         Returns NULL if the port is invalid.
+ */
 static void *getPort(uint8_t port)
 {
 	switch(port)
@@ -184,27 +196,43 @@ static void *getPort(uint8_t port)
 	}
 }
 
-static void bitSet(uint8_t port, uint8_t pin)
+/**
+ * @brief Sets a specific bit to HIGH in the specified port.
+ *
+ * @param port  Port identifier (PORTA, PORTB, PORTD).
+ * @param bit   Bit number within the port (0–7 for POTA and PORTB;
+ * 				0-15 for PORTD).
+ */
+static void bitSet(uint8_t port, uint8_t bit)
 {
+	// Handle special case for PORTD
 	if(port == PORTD)
 	{
-		_WORD = _bitSet(_WORD, pin);
+		_WORD = _bitSet(_WORD, bit);
 		return;
 	}
 
+	// Get a pointer to the port structure
 	gpio_port_t *p = getPort(port);
 	if(p == NULL)
 	{
 		return;
 	}
-	p->byte = _bitSet(p->byte, pin);
+	p->byte = _bitSet(p->byte, bit);
 }
 
-static void bitClr(uint8_t port, uint8_t pin)
+/**
+ * @brief Clears a specific pin (sets it to LOW) in the specified port.
+ *
+ * @param port  Port identifier (PORTA, PORTB, PORTD).
+ * @param bit   Bit number within the port (0–7 for POTA and PORTB;
+ * 				0-15 for PORTD).
+ */
+static void bitClr(uint8_t port, uint8_t bit)
 {
 	if(port == PORTD)
 	{
-		_WORD = _bitClr(_WORD, pin);
+		_WORD = _bitClr(_WORD, bit);
 		return;
 	}
 
@@ -213,14 +241,21 @@ static void bitClr(uint8_t port, uint8_t pin)
 	{
 		return;
 	}
-	p->byte = _bitClr(p->byte, pin);
+	p->byte = _bitClr(p->byte, bit);
 }
 
-static void bitToggle(uint8_t port, uint8_t pin)
+/**
+ * @brief Toggles the state of a specific pin in the specified port.
+ *
+ * @param port  Port identifier (PORTA, PORTB, PORTD).
+ * @param bit   Bit number within the port (0–7 for POTA and PORTB;
+ * 				0-15 for PORTD).
+ */
+static void bitToggle(uint8_t port, uint8_t bit)
 {
 	if(port == PORTD)
 	{
-		_WORD = _bitToggle(_WORD, pin);
+		_WORD = _bitToggle(_WORD, bit);
 		return;
 	}
 
@@ -229,7 +264,7 @@ static void bitToggle(uint8_t port, uint8_t pin)
 	{
 		return;
 	}
-	p->byte = _bitToggle(p->byte, pin);
+	p->byte = _bitToggle(p->byte, bit);
 }
 
 static void maskOn(uint8_t port, uint16_t mask)
@@ -249,6 +284,12 @@ static void maskOn(uint8_t port, uint16_t mask)
 	p->byte = _maskOn(p->byte, mask);
 }
 
+/**
+ * @brief Sets multiple bits to HIGH using a bitmask.
+ *
+ * @param port  Port identifier (PORTA, PORTB, PORTD).
+ * @param mask  Bitmask indicating which pins to set.
+ */
 static void maskOff(uint8_t port, uint16_t mask)
 {
 	if(port == PORTD)
@@ -265,6 +306,12 @@ static void maskOff(uint8_t port, uint16_t mask)
 	p->byte = _maskOff(p->byte, mask);
 }
 
+/**
+ * @brief Clears (sets to LOW) multiple bits using a bitmask.
+ *
+ * @param port  Port identifier (PORTA, PORTB, PORTD).
+ * @param mask  Bitmask indicating which pins to clear.
+ */
 static void maskToggle(uint8_t port, uint16_t mask)
 {
 	if(port == PORTD)
