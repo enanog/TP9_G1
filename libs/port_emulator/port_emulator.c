@@ -18,10 +18,9 @@
 #include <stdint.h>
 #include "port_emulator.h"
 
-#define _PORTA portD.REGISTER.PORT.A
-#define _PORTB portD.REGISTER.PORT.B
-#define _WORD portD.REGISTER.WORD
-#define _MODE portD.MODE
+#define _PDDR portD.PDDR.WORD
+#define _PDIR portD.PDIR.WORD
+#define _PDOR portD.PDOR.WORD
 #define sizePort 8
 
 #define _offsetPort(port) ((!(port))? 8: 0)
@@ -32,58 +31,33 @@
 #define _maskOn(x, mask) ((x) | (mask))
 #define _maskOff(x, mask) ((x) & ~(mask))
 #define _maskToggle(x, mask) ((x) ^ (mask))
+#define _maskGet(x, mask) ((x) & (mask))
 
-/*
-typedef union
-{
-	struct
-	{
-		uint8_t _0 : 1;
-		uint8_t _1 : 1;
-		uint8_t _2 : 1;
-		uint8_t _3 : 1;
-		uint8_t _4 : 1;
-		uint8_t _5 : 1;
-		uint8_t _6 : 1;
-		uint8_t _7 : 1;
-	}bit;
-	uint8_t byte;
-}gpio_port_t;
+enum {
+    GPIO_ERR_NOTERROR = 0,               // Not an error
+    GPIO_ERR_INVALID_DIRECTION,          // Invalid direction (INPUT/OUTPUT)
+    GPIO_ERR_INVALID_STATE,              // Invalid output state (HIGH/LOW/TOGGLE)
+    GPIO_ERR_WRITE_TO_INPUT,             // Writing to pin configured as input
+    GPIO_ERR_READ_OUTPUT_AS_INPUT        // Reading from a pin configured as output
+};
 
 typedef union
 {
-#ifndef BIG_ENDIAN
-	struct
-	{
-		gpio_port_t B;
-		gpio_port_t A;
-	}PORT;
-#else
-	struct
-	{
-		gpio_port_t A;
-		gpio_port_t B;
-	}PORT;
-#endif
+	uint8_t byte[2];
 	uint16_t WORD;
 }gpio_port_d_t;
 
 typedef struct
 {
-	gpio_port_d_t REGISTER;
-	uint16_t MODE;
+	gpio_port_d_t PDDR;	// Port Data Direction Register
+	gpio_port_d_t PDIR;	// Port Data Input Register
+	gpio_port_d_t PDOR;	// Port Data Output Register
 }gpio_register_t;
-*/
 
-gpio_register_t portD = { .REGISTER.WORD = 0, .MODE = 0};
 
-static void* getPort(uint8_t port);
-static void bitSet(uint8_t port, uint8_t bit);
-static void bitClr(uint8_t port, uint8_t bit);
-static void bitToggle(uint8_t port, uint8_t bit);
-static void maskOn(uint8_t port, uint16_t mask);
-static void maskOff(uint8_t port, uint16_t mask);
-static void maskToggle(uint8_t port, uint16_t mask);
+static uint8_t GPIO_Error(uint8_t port, uint8_t pin, uint8_t code);
+
+static gpio_register_t portD = { .PDDR.WORD = 0, .PDIR.WORD = 0x1AAD, .PDOR.WORD = 0};
 
 /*******************************************************************************
  *******************************************************************************
@@ -93,35 +67,110 @@ static void maskToggle(uint8_t port, uint16_t mask);
 
 void GPIO_PinInit(uint8_t port, uint8_t pin, uint8_t state)
 {
+	if(GPIO_Error(port, pin, 0))
+	{	
+		return; // Port does not exist or Pin index exceeds port size
+	}
+	else if(state > 1)
+	{
+		GPIO_Error(port, pin, GPIO_ERR_INVALID_DIRECTION);
+		return;
+	} 
 	uint8_t offset = _offsetPort(port);
-	_MODE = (state)? _bitSet(_MODE , pin + offset): _bitClr(_MODE , pin + offset);
+	_PDDR = (state)? _bitSet(_PDDR , pin + offset): _bitClr(_PDDR , pin + offset);
+}
+
+void GPIO_MaskInit(uint8_t port, uint16_t mask, uint8_t state)
+{
+	if(GPIO_Error(port, 0, 0)) // Port does not exist, don't care about pin
+	{	
+		return;
+	}
+	else if (state != INPUT && state != OUTPUT)
+    {
+        GPIO_Error(port, 0, GPIO_ERR_INVALID_DIRECTION);
+        return;
+    }
+    else if((mask > 0xFF && (port == PORTA || port == PORTB)))
+    {
+		GPIO_Error(port, 0XFF, 0);
+		return;		
+	}
+	
+	uint8_t offset = _offsetPort(port);
+	_PDDR = (state)? _maskOn(_PDDR , mask << offset): _maskOff(_PDDR , mask << offset);
 }
 
 void GPIO_SetPinState(uint8_t port, uint8_t pin, uint8_t state)
 {
 	uint8_t offset = _offsetPort(port);
-
-	// Check if the pin is configured as OUTPUT
-	if(_bitGet(_MODE, pin + offset) != OUTPUT)
-	{
+	if(GPIO_Error(port, pin, 0)) 
+	{	
 		return;
 	}
-
+	else if(_bitGet(_PDDR, pin + offset) != OUTPUT)
+	{
+		GPIO_Error(port, pin, GPIO_ERR_WRITE_TO_INPUT);
+		return;
+	}
+	
 	switch(state)
 	{
 		case HIGH:
-			bitSet(port, pin);
+			_PDOR = _bitSet(_PDOR, pin + offset);
 			break;
 
 		case LOW:
-			bitClr(port, pin);
+			_PDOR = _bitClr(_PDOR, pin + offset);
 			break;
 
 		case TOGGLE:
-			bitToggle(port, pin);
+			_PDOR = _bitToggle(_PDOR, pin + offset);
 			break;
 
 		default:
+			GPIO_Error(port, pin, GPIO_ERR_INVALID_STATE);
+			break;
+	}
+}
+
+void GPIO_SetMaskedOutput(uint8_t port, uint16_t mask, uint8_t state)
+{
+	uint8_t offset = _offsetPort(port);
+
+	if(GPIO_Error(port, 0, 0)) // Port does not exist, don't care about pin
+	{	
+		return;
+	}
+	
+	// Loop through each bit in the port's range
+	uint8_t range = (port == PORTA)? 2*sizePort: sizePort;
+    for (uint8_t i = offset; i < range; i++)
+    {
+		// If the current bit is included in the mask and the pin is not set as OUTPUT
+        if (_bitGet(_PDDR, i) != OUTPUT && _bitGet(mask, i - offset))
+        {
+            GPIO_Error(port, i - offset, GPIO_ERR_WRITE_TO_INPUT);
+            return;
+        }
+    }
+    
+	switch(state)
+	{
+		case HIGH:
+			_PDOR = _maskOn(_PDOR, mask << offset);
+			break;
+
+		case LOW:
+			_PDOR = _maskOff(_PDOR, mask << offset);
+			break;
+
+		case TOGGLE:
+			_PDOR = _maskToggle(_PDOR, mask << offset);
+			break;
+
+		default:
+			GPIO_Error(port, 0, GPIO_ERR_INVALID_STATE); // 0x0 indicates don't care about pin
 			break;
 	}
 }
@@ -129,202 +178,101 @@ void GPIO_SetPinState(uint8_t port, uint8_t pin, uint8_t state)
 uint8_t GPIO_ReadPin(uint8_t port, uint8_t pin)
 {
 	uint8_t offset = _offsetPort(port);
-	if(_bitGet(_MODE, pin + offset) != INPUT)
-	{
-		return INPUT_ERROR;
+	if(GPIO_Error(port, pin, 0)) 
+	{	
+		return GPIO_ERR_INPUT;
 	}
-
-	// Read the pin state from the _WORD register
-	uint8_t state = _bitGet(_WORD, pin + offset);
+	else if(_bitGet(_PDDR, pin + offset) != INPUT)
+	{
+		GPIO_Error(port, pin, GPIO_ERR_READ_OUTPUT_AS_INPUT);
+		return GPIO_ERR_INPUT;
+	}
+	
+	// Read the pin state from the _PDDR register
+	uint8_t state = _bitGet(_PDIR, pin + offset);
 	return state;	// Return the read state
 }
 
-void GPIO_SetMaskedOutput(uint8_t port, uint16_t mask, uint8_t state)
+uint16_t GPIO_MaskRead(uint8_t port, uint16_t mask)
 {
-	for(uint8_t i = _offsetPort(port); i < 2*sizePort; i++)
-	{
-		if(_bitGet(_MODE, i) != OUTPUT && _bitGet(mask, i))
-		{
-			return;
-		}
+	uint8_t offset = _offsetPort(port);
+
+	if(GPIO_Error(port, 0, 0)) // Port does not exist, don't care about pin
+	{	
+		return GPIO_ERR_INPUT_MASK;
 	}
-	switch(state)
-	{
-		case HIGH:
-			maskOn(port, mask);
-			break;
-
-		case LOW:
-			maskOff(port, mask);
-			break;
-
-		case TOGGLE:
-			maskToggle(port, mask);
-			break;
-
-		default:
-			break;
-	}
+	
+	// Loop through each bit in the port's range
+	uint8_t range = (port == PORTA)? 2*sizePort: sizePort;
+    for (uint8_t i = offset; i < range; i++)
+    {
+		// If the current bit is included in the mask and the pin is not set as OUTPUT
+        if (_bitGet(_PDDR, i) != INPUT && _bitGet(mask, i - offset))
+        {
+            GPIO_Error(port, i - offset, GPIO_ERR_READ_OUTPUT_AS_INPUT);
+            return GPIO_ERR_INPUT_MASK;
+        }
+    }
+	
+	uint16_t state = _maskGet(_PDIR, mask << offset);
+	return (!port)? state >> offset: state;
 }
 
 /*******************************************************************************
  *******************************************************************************
-                        LOCAL FUNCTION DEFINITIONS
+                             LOCAL DEFINITIONS
  *******************************************************************************
  ******************************************************************************/
-
-/**
- * @brief Returns a pointer to the internal memory representation of a GPIO port.
- *
- * @param port  Identifier for the port (PORTA, PORTB, or PORTD).
- *
- * @return Pointer to the corresponding port structure or variable.
- *         Returns NULL if the port is invalid.
- */
-static void *getPort(uint8_t port)
+static uint8_t GPIO_Error(uint8_t port, uint8_t pin, uint8_t code) 
 {
-	switch(port)
+	uint8_t error = 0;
+	
+	if(!code)
 	{
-		case PORTA:
-			return &_PORTA;
-		case PORTB:
-			return &_PORTB;
-		case PORTD:
-			return &portD;
-		default:
-			return NULL;
+		if(port > 2)
+		{
+			error = 1;
+			printf("\nError: specified port does not exist.\n");
+		}
+		else if((pin >= sizePort && (port == PORTA || port == PORTB)) || (pin >= 2*sizePort && port == PORTD))
+		{
+			if(pin != 0xFF)
+			{
+				error = 1;
+				printf("\nError: attempting to access pin %d on port %c, which exceeds port size.", pin, 'A'+port);
+			}
+			else
+			{
+				error = 1;
+				printf("\nError: attempting to access a pin of port %c which exceeds port size.", 'A'+port);
+			}
+		}
 	}
+	switch (code) 
+	{
+		case GPIO_ERR_NOTERROR:
+			break;
+		case GPIO_ERR_INVALID_DIRECTION:
+			error = 1;
+			printf("\nError: invalid direction mode specified. Use INPUT (0) or OUTPUT (1).");
+			break;
+		case GPIO_ERR_INVALID_STATE:
+	    	error = 1;
+	    	printf("\nError: invalid output state specified. Use HIGH (1), LOW (0), or TOGGLE (2).");
+	    	break;
+	    case GPIO_ERR_WRITE_TO_INPUT:
+	    	error = 1;
+	    	printf("\nWarning: trying to write to a pin configured as input. Operation ignored.");
+	    	break;
+	    case GPIO_ERR_READ_OUTPUT_AS_INPUT:
+	    	error = 1;
+	    	printf("\nWarning: attempting to read an output pin as input. Returning 0xFF or 0xFFFF as error value.");
+	    	break;
+	    default:
+	    	error = 1;
+	    	printf("Error: unknown GPIO error.\n");
+	    	break;
+    }
+    
+    return error;
 }
-
-/**
- * @brief Sets a specific bit to HIGH in the specified port.
- *
- * @param port  Port identifier (PORTA, PORTB, PORTD).
- * @param bit   Bit number within the port (0–7 for POTA and PORTB;
- * 				0-15 for PORTD).
- */
-static void bitSet(uint8_t port, uint8_t bit)
-{
-	// Handle special case for PORTD
-	if(port == PORTD)
-	{
-		_WORD = _bitSet(_WORD, bit);
-		return;
-	}
-
-	// Get a pointer to the port structure
-	gpio_port_t *p = getPort(port);
-	if(p == NULL)
-	{
-		return;
-	}
-	p->byte = _bitSet(p->byte, bit);
-}
-
-/**
- * @brief Clears a specific pin (sets it to LOW) in the specified port.
- *
- * @param port  Port identifier (PORTA, PORTB, PORTD).
- * @param bit   Bit number within the port (0–7 for POTA and PORTB;
- * 				0-15 for PORTD).
- */
-static void bitClr(uint8_t port, uint8_t bit)
-{
-	if(port == PORTD)
-	{
-		_WORD = _bitClr(_WORD, bit);
-		return;
-	}
-
-	gpio_port_t *p = getPort(port);
-	if(p == NULL)
-	{
-		return;
-	}
-	p->byte = _bitClr(p->byte, bit);
-}
-
-/**
- * @brief Toggles the state of a specific pin in the specified port.
- *
- * @param port  Port identifier (PORTA, PORTB, PORTD).
- * @param bit   Bit number within the port (0–7 for POTA and PORTB;
- * 				0-15 for PORTD).
- */
-static void bitToggle(uint8_t port, uint8_t bit)
-{
-	if(port == PORTD)
-	{
-		_WORD = _bitToggle(_WORD, bit);
-		return;
-	}
-
-	gpio_port_t *p = getPort(port);
-	if(p == NULL)
-	{
-		return;
-	}
-	p->byte = _bitToggle(p->byte, bit);
-}
-
-static void maskOn(uint8_t port, uint16_t mask)
-{
-	if(port == PORTD)
-	{
-		_WORD = _maskOn(_WORD, mask);
-		return;
-	}
-
-	gpio_port_t *p = getPort(port);
-	if(p == NULL)
-	{
-		return;
-	}
-
-	p->byte = _maskOn(p->byte, mask);
-}
-
-/**
- * @brief Sets multiple bits to HIGH using a bitmask.
- *
- * @param port  Port identifier (PORTA, PORTB, PORTD).
- * @param mask  Bitmask indicating which pins to set.
- */
-static void maskOff(uint8_t port, uint16_t mask)
-{
-	if(port == PORTD)
-	{
-		_WORD = _maskOff(_WORD, mask);
-		return;
-	}
-
-	gpio_port_t *p = getPort(port);
-	if(p == NULL)
-	{
-		return;
-	}
-	p->byte = _maskOff(p->byte, mask);
-}
-
-/**
- * @brief Clears (sets to LOW) multiple bits using a bitmask.
- *
- * @param port  Port identifier (PORTA, PORTB, PORTD).
- * @param mask  Bitmask indicating which pins to clear.
- */
-static void maskToggle(uint8_t port, uint16_t mask)
-{
-	if(port == PORTD)
-	{
-		_WORD = _maskToggle(_WORD, mask);
-		return;
-	}
-
-	gpio_port_t *p = getPort(port);
-	if(p == NULL)
-	{
-		return;
-	}
-	p->byte = _maskToggle(p->byte, mask);
-}
-
