@@ -20,6 +20,7 @@
 #include <stdint.h>
 #include "libs/port_emulator/port_emulator.h"
 #include "libs/leds_emulator/leds_emulator.h"
+#include "libs/nstdio/nstdio.h"
 
 void ClearInputBuffer();
 
@@ -45,7 +46,9 @@ int main() {
 	GPIO_SetMaskedOutput(PORTA, 0xFF, OUTPUT);
 	
 	uint8_t prog = RUNNING;
-	
+	char str[4];
+	readString("Hola", str);
+	printf("%s", str);
 	showMenu();
 	
 	display_leds(15, 0xff);
