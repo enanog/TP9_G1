@@ -29,6 +29,9 @@ static uint8_t isInt(const char *str);
 static uint8_t isFloat(const char *str);
 static uint8_t isHex(const char *str);
 static int strToInt(const char *str);
+static double strToFloat(const char *str);
+static uint32_t strToHex(const char *str);
+static double pow(double x, uint8_t n);
 
 /*******************************************************************************
  *******************************************************************************
@@ -65,7 +68,16 @@ uint8_t readFloat(const char *str, void *dest)
 	return 1;
 }
 
-uint8_t readHex(const char *str, void *dest);
+uint8_t readHex(const char *str, void *dest)
+{
+	if(!isByte(str))
+	{
+		printf("[ERROR] '%s' is not a valid hex format.\n", str);
+		return 0;
+	}
+	*((uint32_t *)dest) = strToHex(str);
+}
+
 uint8_t readChar(const char *str, void *dest);
 uint8_t readString(const char *str, void *dest);
 
@@ -184,3 +196,27 @@ static int strToInt(const char *str)
 
 	return sign * num;
 }
+
+static uint32_t strToHex(const char *str)
+{
+	uint8_t i;
+	uint32_t num;
+
+	for(i = 2; str[i] != '\0'; i++)
+	{
+		num =
+	}
+
+	return num;
+}
+
+static double pow(double x, uint8_t n)
+{
+	double result;
+	for(uint8_t i = 0, result = 1; i < n; i++)
+	{
+		result *= x;
+	}
+	return result;
+}
+
