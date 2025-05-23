@@ -19,6 +19,9 @@
 #include <stdio.h>
 #include <stdint.h>
 #include "libs/port_emulator/port_emulator.h"
+#include "libs/leds_emulator/leds_emulator.h"
+
+void ClearInputBuffer();
 
 enum
 {
@@ -35,86 +38,72 @@ enum
 	RUNNING,
 };
 
-int main(void)
-{
-	/**/
-	GPIO_PinInit(PORTA, 0, INPUT);
-	GPIO_PinInit(PORTA, 1, OUTPUT);
-	GPIO_PinInit(PORTA, 3, OUTPUT);
+
+
+int main() {
+    GPIO_MaskInit(PORTA, 0xFF, OUTPUT);
+	GPIO_SetMaskedOutput(PORTA, 0xFF, OUTPUT);
 	
-	GPIO_PinInit(PORTB, 2, INPUT);
-	GPIO_PinInit(PORTB, 5, OUTPUT);
-	GPIO_PinInit(PORTB, 7, OUTPUT);
-	
-	GPIO_PinInit(PORTA, 8, OUTPUT);
-	GPIO_PinInit(PORTB, 8, OUTPUT);
-	GPIO_PinInit(PORTD, 16, OUTPUT);
-	GPIO_MaskInit(PORTA, 0x1000, OUTPUT);
-	GPIO_MaskInit(PORTB, 0x1000, OUTPUT);
-	GPIO_MaskInit(4, 0, OUTPUT);
-	
-	GPIO_MaskInit(PORTA, 0x00FF, INPUT);
-	GPIO_MaskInit(PORTB, 0x00FF, INPUT);
-	GPIO_MaskInit(PORTD, 0xFFFF, OUTPUT);
-	
-	GPIO_SetMaskedOutput(PORTD, 0xFFFF, HIGH);
-	GPIO_SetMaskedOutput(PORTB, 0x00FF, LOW);
-	GPIO_SetMaskedOutput(PORTA, 0x00FF, TOGGLE);
-	GPIO_MaskInit(PORTD, 0xFFFF, INPUT);
-	GPIO_SetMaskedOutput(PORTD, 0xFFFF, TOGGLE);
-	GPIO_MaskInit(PORTD, 0xFFFF, OUTPUT);
-	GPIO_SetPinState(PORTA, 0, TOGGLE);
-	GPIO_SetPinState(PORTA, 1, LOW);
-	GPIO_SetPinState(PORTB, 0, TOGGLE);
-	GPIO_SetPinState(PORTB, 0, HIGH);
-	
-	GPIO_ReadPin(PORTA, 0);
-	GPIO_ReadPin(PORTB, 0);
-	GPIO_ReadPin(4, 0);
-	GPIO_MaskInit(PORTD, 0xFFFF, INPUT);
-	printf("PORTA: ");
-	for(uint8_t i = 8; i >= 1; i--)
-		printf("%d ", GPIO_ReadPin(PORTA, i-1));
-	printf("\n");
-	printf("PORTB: ");
-	for(uint8_t i = 8; i >= 1; i--)
-		printf("%d ", GPIO_ReadPin(PORTB, i-1));
-	
-	
-	GPIO_PinInit(PORTD, 1, OUTPUT);
-	printf("\nPORTA: %X", GPIO_MaskRead(PORTA, 0xFF));
-	printf("\nPORTB: %X", GPIO_MaskRead(PORTB, 0xFF));
-	printf("\nPORTD: %X", GPIO_MaskRead(PORTD, 0xFFFF));
-	/**/
-	
-	/*
 	uint8_t prog = RUNNING;
-
-	while(prog)
-	{
-		switch(prog)
-		{
-			case LED_SELECTOR:
-				break;
-
-			case NOT_LED:
-				break;
-
-			case OFF_ALL:
-				break;
-
-			case ON_ALL:
-				break;
-
-			case FINISH:
-				prog = STOP;
-				break;
-
-			default:
-				printf("Se ingreso un comando erroneo.\n");
-				break;
-		}
-	}*/
-
-	return 0;
+	
+	showMenu();
+	
+	display_leds(15, 0xff);
+	showMenu();
+    return 0;
 }
+
+void ClearInputBuffer(void)
+{
+	char c;
+	while((c = getchar()) != '\n' && c != EOF);
+}
+
+void showMenu() {
+    printf("\t\t\t=========== LED SIMULATOR MENU ===========\n");
+    printf("\t\t\t [0-7]  Turn ON a specific LED\n");
+    printf("\t\t\t [t]    Toggle all LEDs\n");
+    printf("\t\t\t [c]    Clear (turn off) all LEDs\n");
+    printf("\t\t\t [s]    Set (turn on) all LEDs\n");
+    printf("\t\t\t [q]    Quit program\n");
+    printf("\t\t\t==========================================\n");
+    printf("\n\n\n\t\t\t\t\tPress a key to continue...");
+    ClearInputBuffer();
+    CLEAR_SCREEN();
+}
+
+//int main(void)
+//{
+////	uint8_t prog = RUNNING;
+//	GPIO_MaskInit(PORTA, 0xFF, OUTPUT);
+//	GPIO_SetMaskedOutput(PORTA, 0xFF, OUTPUT);
+//	/*while(prog)
+//	{
+//		
+//		switch(prog)
+//		{
+//			case LED_SELECTOR:
+//				break;
+//
+//			case NOT_LED:
+//				break;
+//
+//			case OFF_ALL:
+//				break;
+//
+//			case ON_ALL:
+//				break;
+//
+//			case FINISH:
+//				prog = STOP;
+//				break;
+//
+//			default:
+//				printf("Se ingreso un comando erroneo.\n");
+//				break;
+//		}
+//	}*/
+//
+//	return 0;
+//}
+
