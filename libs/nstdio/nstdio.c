@@ -36,7 +36,10 @@ static int strToInt(const char *str);
  *******************************************************************************
  ******************************************************************************/
 
-uint8_t nscaf(scanCallback *callbacks, void **destinations, uint8_t count);
+void nscaf(scanCallback *callbacks, void **destinations, uint8_t count)
+{
+
+}
 
 uint8_t readInt(const char *str, void *dest)
 {

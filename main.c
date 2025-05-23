@@ -47,7 +47,7 @@ int main() {
 	
 	uint8_t prog = RUNNING;
 	char str[4];
-	readString("Hola", str);
+	//readString("Hola", str);
 	printf("%s", str);
 	showMenu();
 	
